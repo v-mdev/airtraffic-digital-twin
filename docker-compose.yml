@@ -1,0 +1,20 @@
+services:
+  airflow:
+    image: python:3.10
+    ports:
+      - "8080:8080"
+    volumes:
+      - C:\Users\victo\Documents\MBD\TFM\airtraffic-digital-twin:/airflow
+    environment:
+      - AIRFLOW_HOME=/airflow
+    command: >
+      bash -c "
+        pip install --upgrade pip &&
+        export AIRFLOW_HOME=/airflow &&
+        AIRFLOW_VERSION=3.0.3 &&
+        PYTHON_VERSION=$(python -c 'import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")') &&
+        CONSTRAINT_URL=https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt &&
+        pip install uv &&
+        uv pip install apache-airflow==${AIRFLOW_VERSION} --constraint ${CONSTRAINT_URL} &&
+        airflow standalone
+      "
