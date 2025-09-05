@@ -1,6 +1,6 @@
 from src.airtraffic.config.config import settings
 import requests
-from database.redis_db import r
+from src.airtraffic.database.redis_db import r
 
 def get_token_redis():
 
@@ -13,12 +13,16 @@ def get_token_redis():
             'client_secret': settings.password,
         }
 
+        print(data)
+
         a = requests.post(
             'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token',
             data=data,
         )
 
         token = a.json()['access_token']
+
+        print(token)
 
         r.set("opensky_token", token)
         r.expire("opensky_token", 1500)

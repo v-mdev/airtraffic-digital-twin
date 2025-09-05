@@ -1,5 +1,5 @@
 import redis
-from config import settings
+from src.airtraffic.config.config import settings
 
 r = redis.Redis(
     host=settings.redis_host,

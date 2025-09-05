@@ -1,20 +1,110 @@
 services:
-  airflow:
-    image: python:3.10
+
+  # Kafka Broker
+  broker:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: broker
+    container_name: broker
     ports:
-      - "8080:8080"
-    volumes:
-      - C:\Users\victo\Documents\MBD\TFM\airtraffic-digital-twin:/airflow
+      - "9998:9998"
+      - "9999:9999"
     environment:
-      - AIRFLOW_HOME=/airflow
-    command: >
-      bash -c "
-        pip install --upgrade pip &&
-        export AIRFLOW_HOME=/airflow &&
-        AIRFLOW_VERSION=3.0.3 &&
-        PYTHON_VERSION=$(python -c 'import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")') &&
-        CONSTRAINT_URL=https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt &&
-        pip install uv &&
-        uv pip install apache-airflow==${AIRFLOW_VERSION} --constraint ${CONSTRAINT_URL} &&
-        airflow standalone
-      "
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9998'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Replication for offset topic (default 3)
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1 # Replication for offset topic (default 3)
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: broker
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_PROCESS_ROLES: 'broker,controller' # Broker roles. Required for Kraft
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'  # List of controllers. Required for Kraft
+      KAFKA_LISTENERS: 'PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9998'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'  # Controller names. Required for Kraft
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      # Replace CLUSTER_ID with a unique base64 UUID using "bin/kafka-storage.sh random-uuid" 
+      # See https://docs.confluent.io/kafka/operations-tools/kafka-tools.html#kafka-storage-sh
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+
+  # Kafka UI to configure Kafka
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:v0.7.2
+    ports:
+      - 9000:8080
+    depends_on:
+      - broker
+    environment:
+      KAFKA_CLUSTERS_0_NAME: bigdata-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker:29092
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9999
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      #KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: first
+      #KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+      DYNAMIC_CONFIG_ENABLED: 'true'
+
+  # Schema Registry service
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - broker
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  influxdb:
+    image: influxdb
+    container_name: influxdb
+    restart: always
+    ports:
+      - "8086:8086"
+    volumes:
+     - influxdb-data:/var/lib/influxdb2
+     - influxdb-config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=user
+      - DOCKER_INFLUXDB_INIT_PASSWORD=bigdata12
+      - DOCKER_INFLUXDB_INIT_ORG=masterbigdata
+      - DOCKER_INFLUXDB_INIT_BUCKET=iot
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=4eYvsu8wZCJ6tKuE2sxvFHkvYFwSMVK0011hEEiojvejzpSaij86vYQomN_12au6eK-2MZ6Knr-Sax201y70w==
+      
+  telegraf:
+    image: telegraf:1.30.2
+    container_name: telegraf
+    restart: always
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - influxdb
+      - broker
+
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:
+
+networks:
+  default:
+    name: master-bigdata
