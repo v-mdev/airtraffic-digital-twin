@@ -49,10 +49,10 @@ class Config:
     alert_topic: str = "iot_alerts"
 
     # OpenSky bounding box (ajusta si quieres)
-    lamin: float = 36.5
-    lamax: float = 37.1
-    lomin: float = -4.8
-    lomax: float = -4.3
+    lamin: float = 40
+    lamax: float = 30
+    lomin: float = -5
+    lomax: float = 5
 
     # Frecuencia (segundos) -- debe cuadrar con Telegraf (10s en tu caso)
     sleep_sec: int = 10
